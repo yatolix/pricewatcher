@@ -1,0 +1,6 @@
+aiogram>=3.0
+python-dotenv
+aiosqlite
+aiohttp
+beautifulsoup4
+gigachat
