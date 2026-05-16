@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 async def process_product_check(product) -> float | None:
     price = await fetch_price(product['url'])
     if price is None or price <= 0:
+        # Не удалось получить цену – просто обновляем время проверки
+        await db.touch_check(product['id'])
         return None
 
     await db.update_price(product['id'], price)

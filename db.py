@@ -79,3 +79,13 @@ async def get_products_to_check():
             (now,)
         )
         return await cursor.fetchall()
+    
+async def touch_check(product_id):
+    """Обновляет last_checked без изменения цены."""
+    from datetime import datetime
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE products SET last_checked=? WHERE id=?",
+            (datetime.now().timestamp(), product_id)
+        )
+        await db.commit()
