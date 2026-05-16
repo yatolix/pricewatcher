@@ -15,7 +15,7 @@ load_dotenv()
 
 # Конфигурация GigaChat
 GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-MODEL_NAME = "GigaChat-2-Pro"  # Самая дешёвая и быстрая модель
+MODEL_NAME = "gigachat-2-lite"  # Самая дешёвая и быстрая модель
 
 async def fetch_and_clean_html(url: str) -> str:
     """Загружает страницу и извлекает видимый текст, убирая мусор."""
