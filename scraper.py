@@ -13,19 +13,43 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-MODEL_NAME = "GigaChat-2"   # Lite
+MODEL_NAME = "GigaChat-2"  # Lite
+
+# Реальный User-Agent от обычного Chrome на Windows
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 async def fetch_rendered_html(url: str) -> str:
-    """Открывает страницу в headless Chromium и возвращает HTML."""
+    """Открывает страницу через Chromium с анти-детект мерами."""
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox']
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-blink-features=AutomationControlled',  # убирает navigator.webdriver
+                ]
             )
-            page = await browser.new_page()
-            await page.goto(url, wait_until='networkidle', timeout=30000)
-            await asyncio.sleep(2)  # ждём подгрузку динамики
+            context = await browser.new_context(
+                user_agent=USER_AGENT,
+                viewport={'width': 1920, 'height': 1080},
+                locale='ru-RU'
+            )
+            page = await context.new_page()
+
+            # Дополнительно скрываем факт автоматизации через JavaScript
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru'] });
+                window.chrome = { runtime: {} };
+            """)
+
+            await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            # Ждём ещё 3 секунды для подгрузки всех скриптов
+            await asyncio.sleep(3)
             html = await page.content()
             await browser.close()
             logger.info(f"Playwright загрузил страницу, длина HTML: {len(html)} символов")
@@ -61,7 +85,6 @@ async def fetch_price(url: str) -> float | None:
     if not html:
         return None
 
-    # Попытка быстро извлечь цену без затрат токенов
     price = extract_price_from_html(html)
     if price is not None:
         return price
