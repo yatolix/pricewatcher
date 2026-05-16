@@ -1,26 +1,24 @@
 import asyncio
-import os
-import re
-import logging
-import uuid
-import requests
 import aiohttp
+import re
+import os
+import logging
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-import urllib3
+from gigachat import GigaChat
 
-# Отключаем предупреждения о неверифицированных SSL-соединениях
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Конфигурация GigaChat
 GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-MODEL_NAME = "GigaChat-2-Lite"
+MODEL_NAME = "GigaChat-2-Lite"  # Самая дешёвая и быстрая модель
 
 async def fetch_and_clean_html(url: str) -> str:
+    """Загружает страницу и извлекает видимый текст, убирая мусор."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=20, headers={
@@ -34,7 +32,7 @@ async def fetch_and_clean_html(url: str) -> str:
         text = soup.get_text(separator=' ', strip=True)
         text = re.sub(r'\s+', ' ', text)
         logger.info(f"Очищенный текст (первые 200 символов): {text[:200]}")
-        return text[:3000]
+        return text[:3000]  # Ограничиваем длину для экономии токенов
     except Exception as e:
         logger.error(f"Ошибка загрузки страницы {url}: {e}")
         return ""
@@ -53,60 +51,24 @@ async def fetch_price(url: str) -> float | None:
     )
 
     try:
-        # Получение токена
-        token_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-        token_headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json',
-            'RqUID': str(uuid.uuid4()),
-            'Authorization': f'Basic {GIGACHAT_API_KEY}'
-        }
-        token_data = {'scope': 'GIGACHAT_API_PERS'}
-        resp = requests.post(
-            token_url,
-            headers=token_headers,
-            data=token_data,
-            timeout=10,
-            verify=False  # <-- Отключаем проверку SSL (на случай проблем с сертификатом)
-        )
-        resp.raise_for_status()
-        access_token = resp.json()['access_token']
-        logger.info("Токен GigaChat получен успешно")
-
-        # Запрос к модели
-        chat_url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-        chat_headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
-        }
-        chat_body = {
-            "model": MODEL_NAME,
-            "messages": [
-                {"role": "system", "content": "Ты точный парсер цен. Отвечай только числом или 0."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.0,
-            "max_tokens": 20
-        }
-        resp = requests.post(
-            chat_url,
-            headers=chat_headers,
-            json=chat_body,
-            timeout=30,
-            verify=False  # <-- Здесь тоже отключаем проверку SSL
-        )
-        resp.raise_for_status()
-        raw = resp.json()['choices'][0]['message']['content'].strip()
-        logger.info(f"Ответ GigaChat: {raw!r}")
-
-        match = re.search(r'\d+[\.,]?\d*', raw.replace(',', '.'))
-        if match:
-            price = float(match.group())
-            logger.info(f"Извлечена цена: {price}")
-            return price
-        else:
-            logger.warning(f"Не удалось распарсить число из ответа: {raw!r}")
-            return None
+        with GigaChat(
+            credentials=GIGACHAT_API_KEY,
+            verify_ssl_certs=False,
+            model=MODEL_NAME
+        ) as giga:
+            response = giga.chat(prompt)
+            raw = response.choices[0].message.content.strip()
+            logger.info(f"Ответ GigaChat: {raw!r}")
     except Exception as e:
         logger.error(f"Ошибка обращения к GigaChat: {e}")
+        return None
+
+    # Извлекаем число
+    match = re.search(r'\d+[\.,]?\d*', raw.replace(',', '.'))
+    if match:
+        price = float(match.group())
+        logger.info(f"Извлечена цена: {price}")
+        return price
+    else:
+        logger.warning(f"Не удалось распарсить число из ответа: {raw!r}")
         return None

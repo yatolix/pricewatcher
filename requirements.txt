@@ -3,4 +3,4 @@ python-dotenv
 aiosqlite
 aiohttp
 beautifulsoup4
-requests
+gigachat
