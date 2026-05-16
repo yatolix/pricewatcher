@@ -6,6 +6,8 @@ services:
     container_name: pricewatcher_bot
     restart: unless-stopped
     shm_size: '1gb'
+    mem_limit: 900m          # <-- оставляем 100 МБ для системы
+    memswap_limit: 900m      # без свопа
     volumes:
       - ./data:/app/data
     environment:
