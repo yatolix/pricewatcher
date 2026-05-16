@@ -13,6 +13,10 @@ from scraper import fetch_price
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# Глобальные объекты бота и диспетчера
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,7 @@ async def process_product_check(product) -> float | None:
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
-        "👋 Бот отслеживания цен с ИИ (локальная LLM + Playwright).\n\n"
+        "👋 Бот отслеживания цен с GigaChat AI.\n\n"
         "Команды:\n"
         "/add <ссылка> <желаемая цена> [интервал в минутах] — добавить товар\n"
         "/list — мои товары\n"
@@ -55,7 +59,6 @@ async def cmd_start(message: Message):
         "/set_interval <id> <минуты> — изменить интервал\n"
         "/check <id> — проверить цену сейчас"
     )
-
 
 @dp.message(Command("add"))
 async def cmd_add(message: Message):
@@ -81,7 +84,6 @@ async def cmd_add(message: Message):
     else:
         await message.reply("⚠️ Не удалось определить цену. Попробуйте позже или измените интервал.")
 
-
 @dp.message(Command("list"))
 async def cmd_list(message: Message):
     products = await db.get_user_products(message.from_user.id)
@@ -100,7 +102,6 @@ async def cmd_list(message: Message):
         )
     await message.reply(text)
 
-
 @dp.message(Command("delete"))
 async def cmd_delete(message: Message):
     try:
@@ -114,7 +115,6 @@ async def cmd_delete(message: Message):
         return
     await db.delete_product(product_id)
     await message.reply(f"🗑 Товар {product_id} удалён.")
-
 
 @dp.message(Command("set_interval"))
 async def cmd_set_interval(message: Message):
@@ -130,7 +130,6 @@ async def cmd_set_interval(message: Message):
         return
     await db.update_interval(product_id, minutes)
     await message.reply(f"⏱ Интервал для товара {product_id} изменён на {minutes} мин.")
-
 
 @dp.message(Command("check"))
 async def cmd_check(message: Message):
@@ -168,26 +167,11 @@ async def scheduler_loop():
         await asyncio.sleep(10)
 
 
-# ---------- Инициализация ----------
+# ---------- Запуск ----------
 async def main():
-    global bot, dp
-
-    session = None
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
-
-    # Регистрируем хендлеры (команды)
-    dp.message.register(cmd_start, Command("start"))
-    dp.message.register(cmd_add, Command("add"))
-    dp.message.register(cmd_list, Command("list"))
-    dp.message.register(cmd_delete, Command("delete"))
-    dp.message.register(cmd_set_interval, Command("set_interval"))
-    dp.message.register(cmd_check, Command("check"))
-
     await db.init_db()
     asyncio.create_task(scheduler_loop())
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

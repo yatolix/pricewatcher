@@ -9,5 +9,4 @@ services:
       - ./data:/app/data
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - GIGACHAT_API_KEY=${GIGACHAT_API_KEY}
