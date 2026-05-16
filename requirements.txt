@@ -4,3 +4,4 @@ aiosqlite
 aiohttp
 beautifulsoup4
 gigachat
+requests
