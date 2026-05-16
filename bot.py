@@ -3,7 +3,6 @@ import logging
 import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
-from aiogram.client.proxy import Proxy  # <-- для MTProto
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -173,18 +172,8 @@ async def scheduler_loop():
 async def main():
     global bot, dp
 
-    # MTProto-прокси для обхода блокировки Telegram
-    # Параметры: host, port, secret (hex)
-    proxy = Proxy(
-        host="akkenai.top",      # адрес прокси
-        port=853,                   # порт
-        secret="ee54ce330e4690cc297d2b031ff3f288b06d742e616b656e61692e636c69636b"  # секрет
-    )
-    # Если прокси не нужен (например, вы не в РФ), можно закомментировать:
-    # proxy = None
-
     session = None
-    bot = Bot(token=BOT_TOKEN, proxy=proxy)
+    bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
 
     # Регистрируем хендлеры (команды)
