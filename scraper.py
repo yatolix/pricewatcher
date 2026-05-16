@@ -7,6 +7,10 @@ import requests
 import aiohttp
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+import urllib3
+
+# Отключаем предупреждения о неверифицированных SSL-соединениях
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,7 +20,6 @@ load_dotenv()
 GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
 MODEL_NAME = "GigaChat-2-Lite"
 
-# ---------- Загрузка и очистка HTML ----------
 async def fetch_and_clean_html(url: str) -> str:
     try:
         async with aiohttp.ClientSession() as session:
@@ -36,7 +39,6 @@ async def fetch_and_clean_html(url: str) -> str:
         logger.error(f"Ошибка загрузки страницы {url}: {e}")
         return ""
 
-# ---------- Получение цены через GigaChat ----------
 async def fetch_price(url: str) -> float | None:
     page_text = await fetch_and_clean_html(url)
     if not page_text:
@@ -51,21 +53,27 @@ async def fetch_price(url: str) -> float | None:
     )
 
     try:
-        # Шаг 1: получаем токен доступа (в точности как в официальном примере)
+        # Получение токена
         token_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
         token_headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
-            'RqUID': str(uuid.uuid4()),           # генерируем новый UUID
-            'Authorization': f'Basic {GIGACHAT_API_KEY}'   # <-- Важно: Basic, а не Bearer
+            'RqUID': str(uuid.uuid4()),
+            'Authorization': f'Basic {GIGACHAT_API_KEY}'
         }
         token_data = {'scope': 'GIGACHAT_API_PERS'}
-        resp = requests.post(token_url, headers=token_headers, data=token_data, timeout=10)
+        resp = requests.post(
+            token_url,
+            headers=token_headers,
+            data=token_data,
+            timeout=10,
+            verify=False  # <-- Отключаем проверку SSL (на случай проблем с сертификатом)
+        )
         resp.raise_for_status()
         access_token = resp.json()['access_token']
         logger.info("Токен GigaChat получен успешно")
 
-        # Шаг 2: запрос к модели
+        # Запрос к модели
         chat_url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
         chat_headers = {
             'Authorization': f'Bearer {access_token}',
@@ -80,12 +88,17 @@ async def fetch_price(url: str) -> float | None:
             "temperature": 0.0,
             "max_tokens": 20
         }
-        resp = requests.post(chat_url, headers=chat_headers, json=chat_body, timeout=30)
+        resp = requests.post(
+            chat_url,
+            headers=chat_headers,
+            json=chat_body,
+            timeout=30,
+            verify=False  # <-- Здесь тоже отключаем проверку SSL
+        )
         resp.raise_for_status()
         raw = resp.json()['choices'][0]['message']['content'].strip()
         logger.info(f"Ответ GigaChat: {raw!r}")
 
-        # Извлекаем число
         match = re.search(r'\d+[\.,]?\d*', raw.replace(',', '.'))
         if match:
             price = float(match.group())

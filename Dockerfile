@@ -1,15 +1,18 @@
 FROM python:3.11-slim
 
+# Устанавливаем корневые SSL-сертификаты
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Копируем и устанавливаем зависимости
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Создаём папку для базы данных
 RUN mkdir -p /app/data
 
-# Копируем весь проект
 COPY . .
 
 CMD ["python", "bot.py"]
