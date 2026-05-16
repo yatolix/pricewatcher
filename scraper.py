@@ -2,24 +2,22 @@ import asyncio
 import os
 import re
 import logging
+import uuid
 import requests
+import aiohttp
 from dotenv import load_dotenv
-from langchain_gigachat import GigaChat
 from bs4 import BeautifulSoup
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Конфигурация GigaChat
 GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-MODEL_NAME = "GigaChat-2-Lite" # Самая дешевая и быстрая модель
+MODEL_NAME = "GigaChat-2-Lite"
 
-# Функция для загрузки и очистки HTML
+# ---------- Загрузка и очистка HTML ----------
 async def fetch_and_clean_html(url: str) -> str:
-    """Загружает страницу и извлекает видимый текст."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=20, headers={
@@ -33,12 +31,12 @@ async def fetch_and_clean_html(url: str) -> str:
         text = soup.get_text(separator=' ', strip=True)
         text = re.sub(r'\s+', ' ', text)
         logger.info(f"Очищенный текст (первые 200 символов): {text[:200]}")
-        return text[:3000] # Ограничиваем длину для экономии токенов
+        return text[:3000]
     except Exception as e:
         logger.error(f"Ошибка загрузки страницы {url}: {e}")
         return ""
 
-# Основная функция для извлечения цены
+# ---------- Получение цены через GigaChat ----------
 async def fetch_price(url: str) -> float | None:
     page_text = await fetch_and_clean_html(url)
     if not page_text:
@@ -53,11 +51,39 @@ async def fetch_price(url: str) -> float | None:
     )
 
     try:
-        # Отправляем запрос в GigaChat
-        with GigaChat(credentials=GIGACHAT_API_KEY, verify_ssl_certs=False, model=MODEL_NAME) as giga:
-            response = giga.chat(prompt)
-            raw = response.choices[0].message.content.strip()
-            logger.info(f"Ответ GigaChat: {raw!r}")
+        # Шаг 1: получаем токен доступа (в точности как в официальном примере)
+        token_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+        token_headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+            'RqUID': str(uuid.uuid4()),           # генерируем новый UUID
+            'Authorization': f'Basic {GIGACHAT_API_KEY}'   # <-- Важно: Basic, а не Bearer
+        }
+        token_data = {'scope': 'GIGACHAT_API_PERS'}
+        resp = requests.post(token_url, headers=token_headers, data=token_data, timeout=10)
+        resp.raise_for_status()
+        access_token = resp.json()['access_token']
+        logger.info("Токен GigaChat получен успешно")
+
+        # Шаг 2: запрос к модели
+        chat_url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+        chat_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        chat_body = {
+            "model": MODEL_NAME,
+            "messages": [
+                {"role": "system", "content": "Ты точный парсер цен. Отвечай только числом или 0."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 20
+        }
+        resp = requests.post(chat_url, headers=chat_headers, json=chat_body, timeout=30)
+        resp.raise_for_status()
+        raw = resp.json()['choices'][0]['message']['content'].strip()
+        logger.info(f"Ответ GigaChat: {raw!r}")
 
         # Извлекаем число
         match = re.search(r'\d+[\.,]?\d*', raw.replace(',', '.'))
