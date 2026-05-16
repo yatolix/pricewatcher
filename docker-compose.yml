@@ -5,6 +5,7 @@ services:
     build: .
     container_name: pricewatcher_bot
     restart: unless-stopped
+    shm_size: '1gb'
     volumes:
       - ./data:/app/data
     environment:
